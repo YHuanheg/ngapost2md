@@ -167,8 +167,8 @@ while ($true) {
             Clear-Host
             Write-Host '=== 检查更新 ===' -ForegroundColor Cyan
             Write-Host ''
-            Write-Host '说明: 本程序查询的是上游仓库 ludoux/ngapost2md 的最新版本。'
-            Write-Host '      本分支版本号（2.0.0-fix）与上游不同，被提示“需要更新”属于正常现象。'
+            Write-Host '说明: 本程序查询的是本仓库 YHuanheg/ngapost2md 的最新版本。'
+            Write-Host '' 
             Write-Host ''
             & $exe --update
             Wait-Menu

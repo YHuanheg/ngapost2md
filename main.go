@@ -32,7 +32,7 @@ type Repo struct {
 }
 
 func checkUpdate() {
-	resp, err := req.C().R().Get("https://api.github.com/repos/ludoux/ngapost2md/releases/latest")
+	resp, err := req.C().R().Get("https://api.github.com/repos/YHuanheg/ngapost2md/releases/latest")
 	if err != nil {
 		log.Fatalln("检查更新失败:", err)
 	}
@@ -133,7 +133,7 @@ func main() {
 	}
 
 	if opts.Version {
-		fmt.Println("ngapost2md github.com/ludoux/ngapost2md")
+		fmt.Println("ngapost2md github.com/YHuanheg/ngapost2md")
 		fmt.Println("ngapost2md", nga.VERSION)
 		fmt.Println("Build_Time:", nga.BUILD_TS, time.Unix(cast.ToInt64(nga.BUILD_TS), 0).Local().Format("2006-01-02T15:04:05Z07:00"))
 		fmt.Println("Git_Ref:", nga.GIT_REF)
@@ -147,7 +147,7 @@ func main() {
 		log.Println("导出默认配置文件 config.ini 成功。")
 		os.Exit(0)
 	} else if opts.Help {
-		fmt.Println("ngapost2md github.com/ludoux/ngapost2md")
+		fmt.Println("ngapost2md github.com/YHuanheg/ngapost2md")
 		fmt.Println("使用: ngapost2md tid [--authorid aid]")
 		fmt.Println("或:  ngapost2md url [--authorid aid]")
 		fmt.Println("或:  ngapost2md serve [--host ip] [--port port] [--password pwd] [--no-ui]")
@@ -194,7 +194,7 @@ func main() {
 
 	// 参数检查全部通过
 
-	fmt.Printf("ngapost2md (c) ludoux [ GitHub: https://github.com/ludoux/ngapost2md/tree/neo ]\nVersion: %s     %s\n", nga.VERSION, time.Unix(cast.ToInt64(nga.BUILD_TS), 0).Local().Format("2006-01-02T15:04:05Z07:00"))
+	fmt.Printf("ngapost2md (c) ludoux, fork maintained by YHuanheg [ GitHub: https://github.com/YHuanheg/ngapost2md/tree/neo ]\nVersion: %s     %s\n", nga.VERSION, time.Unix(cast.ToInt64(nga.BUILD_TS), 0).Local().Format("2006-01-02T15:04:05Z07:00"))
 	if nga.DEBUG_MODE == "1" {
 		fmt.Println("==debug mode===")
 		fmt.Println("***DEBUG MODE ON***")

@@ -1,4 +1,4 @@
-$update_download_dir = Join-Path (Get-Location) "\update_temp\";
+﻿$update_download_dir = Join-Path (Get-Location) "\update_temp\";
 $ps1_filename = "win_updater.ps1"
 
 function Override-Copy($source, $dest) {
@@ -13,7 +13,7 @@ function Download-Archive ($filename, $link) {
 }
 
 function Get-Latest-Ngapost2md ($Arch) {
-    $api_gh = "https://api.github.com/repos/ludoux/ngapost2md/releases/latest"
+    $api_gh = "https://api.github.com/repos/YHuanheg/ngapost2md/releases/latest"
     $json = Invoke-WebRequest $api_gh -MaximumRedirection 0 -ErrorAction Ignore -UseBasicParsing | ConvertFrom-Json
     $filename = $json.assets | Where-Object { $_.name -Match "windows-$Arch" } | Select-Object -ExpandProperty name
     $size = $json.assets | Where-Object { $_.name -Match "windows-$Arch" } | Select-Object -ExpandProperty size
@@ -83,7 +83,7 @@ function Check-And-Download-And-Unzip() {
     
     # print new version info
     Write-Host "New version (" $r_title " tag:" $r_tag ") found. Released at" $r_date
-    Write-Host  "You can view changelog at https://github.com/ludoux/ngapost2md/releases/latest"
+    Write-Host  "You can view changelog at https://github.com/YHuanheg/ngapost2md/releases/latest"
     
     # download it
     Download-Archive $r_filename $r_link

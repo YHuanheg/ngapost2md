@@ -70,7 +70,7 @@ Cookie 获取方式：浏览器登录 NGA → 开发者工具 → Application/�
 ./ngapost2md "https://nga.178.com/read.php?tid=123&authorid=456"   # 直接贴链接
 ./ngapost2md -v                         # 显示版本与构建信息
 ./ngapost2md -h                         # 显示帮助
-./ngapost2md -u                         # 检查更新（查询上游仓库 ludoux/ngapost2md）
+./ngapost2md -u                         # 检查更新（查询本仓库 YHuanheg/ngapost2md）
 ./ngapost2md --gen-config-file          # 生成默认 config.ini（覆盖既有文件）
 ```
 

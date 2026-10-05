@@ -935,7 +935,7 @@ func (tiezi *Tiezi) genMarkdown(localMaxFloor int) error {
 			if tiezi.AuthorId > 0 {
 				authorIdOptText = fmt.Sprintf("-只看 %d", tiezi.AuthorId)
 			}
-			_, _ = f.WriteString(fmt.Sprintf("### %s%s\n\nMade by ngapost2md (c) ludoux [GitHub Repo](https://github.com/ludoux/ngapost2md)\n\n", tiezi.Title, authorIdOptText))
+			_, _ = f.WriteString(fmt.Sprintf("### %s%s\n\nMade by ngapost2md (c) ludoux [GitHub Repo](https://github.com/YHuanheg/ngapost2md)\n\n", tiezi.Title, authorIdOptText))
 		}
 
 		if floor.Pid == 0 && len(tiezi.HotPosts) > 0 {

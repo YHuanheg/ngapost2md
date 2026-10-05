@@ -42,7 +42,7 @@ windows
 ```
 > ./ngapost2md -h
 
-ngapost2md github.com/ludoux/ngapost2md
+ngapost2md github.com/YHuanheg/ngapost2md
 使用: ngapost2md tid [--authorid aid]
 或:  ngapost2md url [--authorid aid]
 或:  ngapost2md serve [--host ip] [--port port] [--password pwd] [--no-ui]
@@ -59,7 +59,7 @@ ngapost2md --gen-config-file 生成默认配置文件于 config.ini 并退出
 
 ## 配置说明
 
-详见注释 [config.ini](https://github.com/ludoux/ngapost2md/blob/neo/assets/config.ini)
+详见注释 [config.ini](https://github.com/YHuanheg/ngapost2md/blob/neo/assets/config.ini)
 
 在 release 页面的打包文件中，config.ini 文件与主程序平级。假如需要生成新的默认配置文件，可使用 `--gen-config-file` 参数。此会覆盖 config.ini 为默认配置。
 

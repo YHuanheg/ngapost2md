@@ -101,7 +101,17 @@ gh release create 2.0.1 \
 
 因此当前的发布流程是**本地交叉编译 + `gh release create`**，不依赖 Actions。启用 Actions 后可以改回由 tag 自动发布，注意两者不要同时创建同一个 Release。
 
-## 已知差异
+## 本 fork 的仓库指向约定
 
-- `--update` 硬编码查询上游 `ludoux/ngapost2md` 的最新 Release。fork 的版本号（如 `2.0.0-fix`）与上游不一致时会提示需要更新，属预期现象
-- 程序内多处文案与链接（`-h` 帮助、生成的 Markdown 页脚、`--update` 提示）指向上游仓库，fork 版本沿用未改
+程序内**对外可见**的仓库地址全部指向本 fork（`YHuanheg/ngapost2md`）：
+
+- `--update`：查询 `https://api.github.com/repos/YHuanheg/ngapost2md/releases/latest`；程序内 `VERSION` 与 Release tag 一致时输出"当前已是最新版本"
+- 启动 banner、`-h` 帮助首行、生成的 Markdown 页脚、WebUI 导航栏的 GitHub 图标、定时任务页的 Issues 链接
+- `assets/win_updater.ps1` 的 API 与 changelog 链接
+
+**刻意不改**的两处：
+
+- `go.mod` 的 module 路径与代码里的 import 仍是 `github.com/ludoux/ngapost2md/...`。它是 Go 包标识，改动需要同步全部 import 与所有 `-ldflags` 的 `-X` 参数，且会让本仓库无法再从上游 merge；它不出现在任何用户可见的信息里
+- README 中 `[#109]` / `[#103]` 这类**上游 issue / PR 引用**保持原样——它们指向上游的历史讨论，本 fork 没有对应编号
+
+署名 `(c) ludoux` 在 banner 与生成的 Markdown 页脚中保留（MIT 许可要求保留版权声明），banner 额外标注 `fork maintained by YHuanheg`。
