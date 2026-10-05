@@ -41,7 +41,7 @@ go build -ldflags "\
 
 ## 准备 config.ini
 
-程序要求 `config.ini` 与可执行文件**在同一目录**（即工作目录），否则会报 `无法加载配置文件`。三种获取途径：
+程序从**工作目录**读取 `config.ini`（需与可执行文件在同一目录）。三种获取途径：
 
 1. 从 Release 压缩包解压（包内已附带）
 2. 执行 `./ngapost2md --gen-config-file` 生成默认配置 —— 会**覆盖**已有的 `config.ini`
@@ -107,7 +107,7 @@ curl -u admin:<密码> http://127.0.0.1:18080/api/version   # Basic Auth 可用
 |---|---|
 | `配置项配置错误: ua=` | `[network].ua` 为空或仍是 `<;MODIFY_ME;>` |
 | `配置项配置错误: ngaPassportUid=` / `ngaPassportCid=` | 未填写 Cookie，或值仍含 `MODIFY_ME` |
-| `无法加载配置文件` | 工作目录不是程序所在目录，找不到 `config.ini` |
+| `无法加载配置文件` | `config.ini` 存在但无法解析（损坏、编码或权限问题）；文件**不存在**时程序会自动生成默认配置，不会报此错 |
 | `配置项互斥检查失败，请检查 enhance_ori_reply thread` | 开启 `enhance_ori_reply` 时必须把 `thread` 设为 1 |
 | `配置项互斥检查失败，请检查 enhance_ori_reply_online enhance_ori_reply` | 开启在线增强前必须先开启 `enhance_ori_reply` |
 | Server 启动后忘记密码 | 密码写在 `config.ini` 的 `[server].password`，或见启动日志 |

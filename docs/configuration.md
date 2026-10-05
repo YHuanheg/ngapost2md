@@ -1,6 +1,6 @@
 # 配置说明（config.ini）
 
-程序只从**工作目录**下的 `config.ini` 读取配置，不使用环境变量。`config.ini` 必须与可执行文件同级，否则启动即报 `无法加载配置文件`。
+程序只从**工作目录**下的 `config.ini` 读取配置，不使用环境变量。`config.ini` 需与可执行文件同级；文件不存在时程序会自动生成一份默认配置并提示填写，而不是直接报 `无法加载配置文件`。
 
 ## 自动对齐行为
 
@@ -70,7 +70,7 @@
 2. `enhance_ori_reply=true` 时，`thread` 必须为 1
 3. `enhance_ori_reply_online=true` 时，`enhance_ori_reply` 必须为 true
 
-数值型配置越界时会被夹到合法区间（例如 `thread=5` → 取允许值，`split_md_file=999` → 200）。
+数值型配置越界或非法时会**回落到该项的默认值**，而不是夹到区间边界（实测：`thread=5` → `2`，`split_md_file=999` → `-1`）。
 
 ## 典型配置示例
 
