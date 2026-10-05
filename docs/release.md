@@ -1,0 +1,101 @@
+# 发布流程
+
+## 版本号：三处必须一致
+
+| 位置 | 作用 |
+|---|---|
+| `nga/nga.go` 的 `VERSION` | 程序内版本号，`-v` 显示、`--update` 比对 |
+| git tag | 触发 GitHub Actions、决定 Release 名与产物文件名 |
+| `README.md` 标题 | 面向读者的版本标识 |
+
+**三者不一致会发生什么**：`--update` 拿 `VERSION` 与 GitHub Releases 的 `tag_name` 比较，不相等就提示"请去下载最新版本" —— 即使你用的就是最新版。
+
+> `config.ini` 里的 `[config].version`（`config/config.go` 中 `defaultConfig`）**不是**程序版本，而是**配置文件格式版本**。配置结构没变时不要跟着 bump；它变化会触发所有用户的配置文件迁移。
+
+### bump 步骤
+
+```bash
+# 1. 改版本号
+#    nga/nga.go: VERSION = "2.0.1"
+#    README.md : # ngapost2md ver.[NEO_2.0.1]
+git add nga/nga.go README.md
+git commit -m "chore: bump version to 2.0.1"
+git push origin neo
+```
+
+## 发布前检查
+
+```bash
+go build -o ngapost2md main.go     # 必须通过
+go vet ./...                       # 必须无输出
+./ngapost2md -v                    # 版本号是否为新值
+```
+
+> 本仓库的换行符是 CRLF（`core.autocrlf=true`），`gofmt -l .` 会把所有文件都标为"待格式化"——这是环境噪声。要判断格式是否真的有问题，先把文件按 LF 归一化再跑 `gofmt -l`。
+
+平台矩阵与产物命名沿用上游约定：
+
+| OS | Arch | 压缩格式 |
+|---|---|---|
+| windows | amd64 | `.zip` |
+| linux | amd64 / arm64 | `.tar.gz` |
+| darwin | amd64 / arm64 | `.tar.gz` |
+
+产物名：`ngapost2md-NEO_<tag>-<os>-<arch>`；包内平铺：可执行文件 + `LICENSE` + `README.md` + `assets/config.ini`。
+
+## 本地交叉编译（当前采用的方式）
+
+```bash
+export CGO_ENABLED=0
+TAG=2.0.1
+TS=$(date +%s)
+HASH=$(git rev-parse HEAD)
+LD="-X github.com/ludoux/ngapost2md/nga.DEBUG_MODE=0 \
+    -X github.com/ludoux/ngapost2md/nga.BUILD_TS=$TS \
+    -X github.com/ludoux/ngapost2md/nga.GIT_REF=refs/tags/$TAG \
+    -X github.com/ludoux/ngapost2md/nga.GIT_HASH=$HASH"
+
+GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "$LD" -o ngapost2md.exe main.go
+GOOS=linux   GOARCH=amd64 go build -trimpath -ldflags "$LD" -o ngapost2md      main.go
+GOOS=linux   GOARCH=arm64 go build -trimpath -ldflags "$LD" -o ngapost2md      main.go
+GOOS=darwin  GOARCH=amd64 go build -trimpath -ldflags "$LD" -o ngapost2md      main.go
+GOOS=darwin  GOARCH=arm64 go build -trimpath -ldflags "$LD" -o ngapost2md      main.go
+```
+
+每个平台把二进制 + `LICENSE` + `README.md` + `assets/config.ini` 放到独立目录后压缩。
+
+**发布前必须做一次冒烟测试**（交叉编译产物无法直接运行非本机平台，至少验证本机平台）：
+
+```bash
+./ngapost2md.exe -v
+# ngapost2md 2.0.1
+# Build_Time: ...  Git_Ref: refs/tags/2.0.1  Git_Hash: <sha>
+```
+
+`Git_Ref` 与 `Git_Hash` 正确，说明 ldflags 注入成功、产物不是空的。
+
+## 发布
+
+```bash
+git tag -a 2.0.1 -m "ngapost2md ver.[NEO_2.0.1]"
+git push origin 2.0.1
+
+gh release create 2.0.1 \
+  --repo YHuanheg/ngapost2md \
+  --title "ngapost2md ver.[NEO_2.0.1]" \
+  --notes-file release_notes.md \
+  <产物文件...>
+```
+
+## GitHub Actions
+
+`.github/workflows/build.yaml` 在 **tag push** 时触发两个 job：生成 changelog 创建 Release，然后用 `go-release-action` 编译矩阵并上传产物。
+
+**在 fork 中默认不生效**：GitHub 会禁用 fork 的 workflow，需要在网页端 Actions 页面点一次 "I understand my workflows, go ahead and enable them" 之后才会响应推送。此外 workflow 的 token 权限需要是 **Read and write**（Settings → Actions → General → Workflow permissions），否则创建 Release 会 403。
+
+因此当前的发布流程是**本地交叉编译 + `gh release create`**，不依赖 Actions。启用 Actions 后可以改回由 tag 自动发布，注意两者不要同时创建同一个 Release。
+
+## 已知差异
+
+- `--update` 硬编码查询上游 `ludoux/ngapost2md` 的最新 Release。fork 的版本号（如 `2.0.0-fix`）与上游不一致时会提示需要更新，属预期现象
+- 程序内多处文案与链接（`-h` 帮助、生成的 Markdown 页脚、`--update` 提示）指向上游仓库，fork 版本沿用未改
