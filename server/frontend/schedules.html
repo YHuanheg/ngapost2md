@@ -74,7 +74,7 @@
 
     async function loadSchedules() {
         const res = await fetch('/api/schedules');
-        const schedules = await res.json();
+        const schedules = (await res.json()) || [];
         const tbody = document.getElementById('schedules-body');
         tbody.innerHTML = '';
         schedules.forEach(s => {
@@ -99,7 +99,7 @@
 
     async function loadPosts() {
         const res = await fetch('/api/posts');
-        const posts = await res.json();
+        const posts = (await res.json()) || [];
         const select = document.getElementById('post-select');
         select.innerHTML = '';
         posts.forEach(p => {

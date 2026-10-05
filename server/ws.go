@@ -29,6 +29,11 @@ type WSMessage struct {
 	CurrentFloor int    `json:"currentFloor,omitempty"`
 	TotalFloor   int    `json:"totalFloor,omitempty"`
 	Stage        string `json:"stage,omitempty"`
+
+	// 单次下载页数限制（#56）相关信息，用于向前端说明本次并未下载完整
+	Limited           bool `json:"limited,omitempty"`
+	WebTotalPage      int  `json:"webTotalPage,omitempty"`
+	PageDownloadLimit int  `json:"pageDownloadLimit,omitempty"`
 }
 
 type WebSocketHub struct {
@@ -74,26 +79,39 @@ func (h *WebSocketHub) Broadcast(msg WSMessage) {
 
 func (h *WebSocketHub) BroadcastProgress(task *TaskStatus) {
 	msg := WSMessage{
-		Type:         "progress",
-		Tid:          task.Tid,
-		TaskType:     task.Type,
-		Status:       task.Status,
-		CurrentPage:  task.CurrentPage,
-		TotalPage:    task.TotalPage,
-		CurrentFloor: task.CurrentFloor,
-		TotalFloor:   task.TotalFloor,
-		Stage:        task.Stage,
+		Type:              "progress",
+		Tid:               task.Tid,
+		TaskType:          task.Type,
+		Status:            task.Status,
+		CurrentPage:       task.CurrentPage,
+		TotalPage:         task.TotalPage,
+		CurrentFloor:      task.CurrentFloor,
+		TotalFloor:        task.TotalFloor,
+		Stage:             task.Stage,
+		Limited:           task.Limited,
+		WebTotalPage:      task.WebTotalPage,
+		PageDownloadLimit: task.PageDownloadLimit,
 	}
 	h.Broadcast(msg)
 }
 
 func (h *WebSocketHub) BroadcastTaskComplete(task *TaskStatus) {
 	msg := WSMessage{
-		Type:     "task_complete",
-		Tid:      task.Tid,
-		TaskType: task.Type,
-		Status:   "completed",
-		Message:  fmt.Sprintf("下载完成，共 %d 页 %d 楼", task.TotalPage, task.TotalFloor),
+		Type:              "task_complete",
+		Tid:               task.Tid,
+		TaskType:          task.Type,
+		Status:            "completed",
+		Limited:           task.Limited,
+		WebTotalPage:      task.WebTotalPage,
+		PageDownloadLimit: task.PageDownloadLimit,
+	}
+	if task.Limited {
+		// 达到单次下载上限时任务本身是成功的，但帖子并没有下载完整，
+		// 必须明确告知用户"还要再来一次"，否则会被误认为已全部导出。
+		msg.Message = fmt.Sprintf("已达单次下载页数上限（%d 页）：本次已下载至第 %d 页，全帖共 %d 页，尚未下载完整。请再次执行增量更新以继续下载后续页面。",
+			task.PageDownloadLimit, task.TotalPage, task.WebTotalPage)
+	} else {
+		msg.Message = fmt.Sprintf("下载完成，共 %d 页 %d 楼", task.TotalPage, task.TotalFloor)
 	}
 	h.Broadcast(msg)
 }

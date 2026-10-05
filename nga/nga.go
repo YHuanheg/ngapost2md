@@ -50,11 +50,6 @@ var (
 	mutex    sync.Mutex
 )
 
-// Flag 相关
-var (
-	page_download_limit_triggered = false
-)
-
 // ldflags 区域。GitHub Actions 编译时会使用 ldflags 来修改如下值：
 var (
 	DEBUG_MODE = "1" //GitHub Actions 打包的时候会修改为"0"。本地打包可以 go build -ldflags "-X 'github.com/ludoux/ngapost2md/nga.DEBUG_MODE=0'" main.go
@@ -220,6 +215,12 @@ type Tiezi struct {
 	CreatedTime      string           // 本任务首次创建时间 (RFC3339)
 	UpdatedTime      string           // 最近一次更新时间 (RFC3339)
 	ProgressCallback ProgressCallback // CLI 模式下为 nil，Server 模式下用于实时进度回调
+
+	// 单次下载页数限制（#56）相关状态。属于单次任务的实例状态，
+	// 不能使用包级变量，否则 Server 模式下多个任务会互相串味。
+	PageDownloadLimit          int  // 本次生效的单次下载页数上限，<= 0 表示不限制
+	PageDownloadLimitTriggered bool // 本次是否因达到单次下载上限而截断
+	WebRealMaxPage             int  // NGA 报告的帖子真实总页数（未经单次下载上限裁剪）
 }
 
 var responseChannel = make(chan string, 15)
@@ -333,9 +334,12 @@ func (tiezi *Tiezi) page(page int) error {
 		// 总页数
 		value_int, _ = jsonparser.GetInt(resp.Bytes(), "totalPage")
 		tiezi.WebMaxPage = cast.ToInt(value_int)
+		// 记录 NGA 报告的真实总页数，供上层判断此帖是否已完整下载
+		tiezi.WebRealMaxPage = tiezi.WebMaxPage
+		tiezi.PageDownloadLimit = CFGFILE_PAGE_DOWNLOAD_LIMIT
 		if CFGFILE_PAGE_DOWNLOAD_LIMIT > 0 && tiezi.WebMaxPage > (tiezi.LocalMaxPage+CFGFILE_PAGE_DOWNLOAD_LIMIT) {
 			tiezi.WebMaxPage = tiezi.LocalMaxPage + CFGFILE_PAGE_DOWNLOAD_LIMIT
-			page_download_limit_triggered = true
+			tiezi.PageDownloadLimitTriggered = true
 		}
 
 		// 楼层数，楼主也算一层
@@ -1021,6 +1025,8 @@ func (tiezi *Tiezi) SaveProcessInfo() error {
 	cfg.NewSection("local")
 	cfg.Section("local").NewKey("max_floor", cast.ToString(tiezi.LocalMaxFloor))
 	cfg.Section("local").NewKey("max_page", cast.ToString(tiezi.LocalMaxPage))
+	// 记录 NGA 报告的真实总页数，Server 模式据此判断此帖是否已完整下载
+	cfg.Section("local").NewKey("web_max_page", cast.ToString(tiezi.WebRealMaxPage))
 	cfg.NewSection("info")
 	cfg.Section("info").NewKey("created_time", tiezi.CreatedTime)
 	cfg.Section("info").NewKey("updated_time", tiezi.UpdatedTime)
@@ -1086,8 +1092,8 @@ func (tiezi *Tiezi) Download() error {
 	}
 
 	log.Println("下载所有页面总耗时:", time.Since(startTime).Truncate(time.Second).String())
-	if page_download_limit_triggered {
-		log.Println("单次下载 Page 数已达上限！本次导出完毕后需要多次重新运行才可全部导出此帖内容。")
+	if tiezi.PageDownloadLimitTriggered {
+		log.Printf("单次下载 Page 数已达上限（%d 页）！本次已下载至第 %d 页，全帖共 %d 页，需要多次重新运行才可全部导出此帖内容。", tiezi.PageDownloadLimit, tiezi.WebMaxPage, tiezi.WebRealMaxPage)
 	}
 
 	// 进度回调：开始内容处理阶段
@@ -1137,8 +1143,8 @@ func (tiezi *Tiezi) Download() error {
 		tiezi.ProgressCallback("completed", tiezi.WebMaxPage, tiezi.WebMaxPage, tiezi.LocalMaxFloor, tiezi.FloorCount)
 	}
 
-	if page_download_limit_triggered {
-		log.Println("单次下载 Page 数已达上限！本次导出完毕后需要多次重新运行才可全部导出此帖内容。")
+	if tiezi.PageDownloadLimitTriggered {
+		log.Printf("单次下载 Page 数已达上限（%d 页）！本次已下载至第 %d 页，全帖共 %d 页，需要多次重新运行才可全部导出此帖内容。", tiezi.PageDownloadLimit, tiezi.WebMaxPage, tiezi.WebRealMaxPage)
 	}
 	log.Println("本次任务结束。")
 	return nil

@@ -467,7 +467,7 @@ func (h *APIHandler) HandleConfigPut(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 保存
-	if err := cfg.SaveTo("config.ini"); err != nil {
+	if err := config.SaveConfigFile(cfg); err != nil {
 		writeError(w, http.StatusInternalServerError, "保存配置文件失败: "+err.Error())
 		return
 	}

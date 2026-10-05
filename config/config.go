@@ -5,9 +5,16 @@ import (
 	"fmt"
 	"log"
 	"math/big"
+	"os"
+	"strings"
+	"sync"
 
 	"gopkg.in/ini.v1"
 )
+
+// 配置读写会出现在 CLI 启动、Server 启动、API 读取/保存等多个位置，
+// 且 GetConfigAutoUpdate 会在配置项缺失时回写文件，用互斥锁避免并发写坏 config.ini
+var configFileMu sync.Mutex
 
 // 定义默认配置。使用 slice 保证顺序
 var sectionList = []string{"config", "network", "post", "server"}
@@ -91,11 +98,22 @@ func GeneratePassword() string {
 
 // 会自动更新、格式化配置文件并保存
 func GetConfigAutoUpdate() (*ini.File, error) {
+	configFileMu.Lock()
+	defer configFileMu.Unlock()
+
 	// 不要等号对齐，那样子好难看
 	ini.PrettyFormat = false
 	// 打开旧的INI配置文件
 	cfg, err := ini.Load("config.ini")
 	if err != nil {
+		if os.IsNotExist(err) {
+			// 首次运行（或用户只下载了可执行文件）时目录下没有 config.ini，
+			// 直接生成一份完整的默认配置，用户无需再手工执行 --gen-config-file
+			if saveErr := SaveDefaultConfigFile(); saveErr != nil {
+				return nil, fmt.Errorf("未找到 config.ini，且生成默认配置文件失败: %v", saveErr)
+			}
+			return nil, fmt.Errorf("未找到 config.ini，已自动生成默认配置文件。请填写 ua、ngaPassportUid、ngaPassportCid 后重新运行")
+		}
 		return nil, fmt.Errorf("无法加载配置文件: %v", err)
 	}
 
@@ -131,9 +149,14 @@ func GetConfigAutoUpdate() (*ini.File, error) {
 		defaultcfg.Section("post").Key("use_network_media_url").SetValue(oldValue)
 	}
 
-	// 基于默认配置，往默认配置内填已存在配置的信息
+	// 基于默认配置，往默认配置内填已存在配置的信息，同时记录默认配置里已有的键
+	knownKeys := map[string]map[string]bool{}
 	for _, section := range defaultcfg.Sections() {
+		if knownKeys[section.Name()] == nil {
+			knownKeys[section.Name()] = map[string]bool{}
+		}
 		for _, key := range section.Keys() {
+			knownKeys[section.Name()][key.Name()] = true
 			if section.Name() == "config" && key.Name() == "version" {
 				// 版本号不读取旧的，换用新的
 				continue
@@ -146,12 +169,61 @@ func GetConfigAutoUpdate() (*ini.File, error) {
 		}
 	}
 
-	if localCfgVersion != latestCfgVersion {
-		err = defaultcfg.SaveTo("config.ini")
-		if err != nil {
+	// 分发包里附带的 config.ini 与程序内置默认配置是两份需要人工同步的副本，
+	// 一旦发版时漏同步（例如 2.0.0 漏掉了 output_path 与 host），
+	// 只按版本号决定是否回写就会导致同版本下缺失的配置项永远补不上，
+	// 用户既看不到也无法修改这些配置项。此处显式检测缺失项并在必要时回写。
+	var missingKeys []string
+	for _, section := range defaultcfg.Sections() {
+		if section.Name() == ini.DefaultSection {
+			continue
+		}
+		for _, key := range section.Keys() {
+			if !cfg.HasSection(section.Name()) || !cfg.Section(section.Name()).HasKey(key.Name()) {
+				missingKeys = append(missingKeys, section.Name()+"."+key.Name())
+			}
+		}
+	}
+
+	// 回写时以默认配置为模板重建整个文件，因此需要先把用户自行新增的配置项搬回去，避免丢失用户数据
+	for _, section := range cfg.Sections() {
+		if section.Name() == ini.DefaultSection {
+			continue
+		}
+		var extraKeys []*ini.Key
+		for _, key := range section.Keys() {
+			if knownKeys[section.Name()] != nil && knownKeys[section.Name()][key.Name()] {
+				continue
+			}
+			extraKeys = append(extraKeys, key)
+		}
+		if len(extraKeys) == 0 {
+			continue
+		}
+		targetSection, sectionErr := defaultcfg.GetSection(section.Name())
+		if sectionErr != nil {
+			targetSection, _ = defaultcfg.NewSection(section.Name())
+		}
+		if targetSection == nil {
+			continue
+		}
+		for _, key := range extraKeys {
+			targetSection.NewKey(key.Name(), key.Value())
+		}
+	}
+
+	switch {
+	case localCfgVersion != latestCfgVersion:
+		if err = defaultcfg.SaveTo("config.ini"); err != nil {
 			return nil, fmt.Errorf("无法保存更新后的配置文件: %v", err)
 		}
 		log.Println("配置文件已由", localCfgVersion, "自动更新至", latestCfgVersion, "，请查看引入的新功能特性。部分注释可能被移除或更改。")
+	case len(missingKeys) > 0:
+		// 版本号相同但缺少配置项（分发包内附带的 config.ini 落后于程序），同样需要补齐
+		if err = defaultcfg.SaveTo("config.ini"); err != nil {
+			return nil, fmt.Errorf("无法保存补全后的配置文件: %v", err)
+		}
+		log.Println("配置文件缺少以下配置项，已自动补全：", strings.Join(missingKeys, "、"))
 	}
 	return defaultcfg, nil
 }
@@ -173,4 +245,11 @@ func genDefaultConfig() *ini.File {
 
 func SaveDefaultConfigFile() error {
 	return genDefaultConfig().SaveTo("config.ini")
+}
+
+// SaveConfigFile 加锁地把配置写回 config.ini，避免与 GetConfigAutoUpdate 的回写并发冲突
+func SaveConfigFile(cfg *ini.File) error {
+	configFileMu.Lock()
+	defer configFileMu.Unlock()
+	return cfg.SaveTo("config.ini")
 }

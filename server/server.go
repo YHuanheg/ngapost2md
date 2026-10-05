@@ -37,7 +37,7 @@ func Start(opts ServeOpts) error {
 	if password == "" || strings.Contains(password, "MODIFY_ME") {
 		password = config.GeneratePassword()
 		cfg.Section("server").Key("password").SetValue(password)
-		if err := cfg.SaveTo("config.ini"); err != nil {
+		if err := config.SaveConfigFile(cfg); err != nil {
 			return fmt.Errorf("无法保存自动生成的密码到配置文件: %v", err)
 		}
 		fmt.Println("========================================")
@@ -207,10 +207,11 @@ func ReloadConfig() error {
 func ScanAllPosts() []PostInfo {
 	entries, err := os.ReadDir(nga.CFGFILE_OUTPUT_PATH)
 	if err != nil {
-		return nil
+		return []PostInfo{}
 	}
 
-	var posts []PostInfo
+	// 初始化为空切片而非 nil，否则没有帖子时 JSON 会序列化成 null，前端 posts.forEach 会直接报错
+	posts := []PostInfo{}
 	for _, entry := range entries {
 		if !entry.IsDir() {
 			continue
@@ -236,6 +237,8 @@ func ScanAllPosts() []PostInfo {
 		}
 		maxPage := cfg.Section("local").Key("max_page").MustInt(0)
 		maxFloor := cfg.Section("local").Key("max_floor").MustInt(-1)
+		// NGA 报告的真实总页数：大于 max_page 说明该帖因单次下载上限等原因尚未下载完整
+		webMaxPage := cfg.Section("local").Key("web_max_page").MustInt(0)
 		createdTime := cfg.Section("info").Key("created_time").String()
 		updatedTime := cfg.Section("info").Key("updated_time").String()
 
@@ -266,6 +269,7 @@ func ScanAllPosts() []PostInfo {
 			FolderName:  name,
 			MaxPage:     maxPage,
 			MaxFloor:    maxFloor,
+			WebMaxPage:  webMaxPage,
 			HasMarkdown: hasMarkdown,
 			CreatedTime: createdTime,
 			UpdatedTime: updatedTime,

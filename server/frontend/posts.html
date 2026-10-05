@@ -7,8 +7,10 @@
     <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/picocss/2.1.1/pico.min.css">
     <style>
         :root { --pico-container-max-width: 60rem; --pico-font-size: 100%; }
-        #posts-table th, #posts-table td { padding: 0.35rem 0.5rem; white-space: nowrap; }
+        #posts-table th, #posts-table td { padding: 0.35rem 0.5rem; white-space: nowrap; vertical-align: top; }
         #posts-table td:nth-child(2) { white-space: normal; max-width: 20rem; overflow: hidden; text-overflow: ellipsis; }
+        /* 文件夹名可能很长且不含空格或连字符，必须允许强制断行，否则会撑破表格 */
+        #posts-table td:nth-child(5) { white-space: normal; overflow-wrap: anywhere; word-break: break-all; max-width: 18rem; }
         .icon-btn { display:inline-flex;align-items:center;justify-content:center;width:1.6rem;height:1.6rem;padding:0;border-radius:var(--pico-border-radius);cursor:pointer;background:transparent;border:1px solid var(--pico-muted-color);color:var(--pico-muted-color);vertical-align:middle; }
         .icon-btn svg { width:14px; height:14px; }
         .icon-btn:hover { background:var(--pico-muted-background);color:var(--pico-color);border-color:var(--pico-color); }
@@ -72,18 +74,28 @@
         return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
     }
 
+    function escapeHtml(s) {
+        return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({
+            '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+        })[c]);
+    }
+
     async function loadPosts() {
         const res = await fetch('/api/posts');
-        const posts = await res.json();
+        const posts = (await res.json()) || [];
         const tbody = document.getElementById('posts-body');
         tbody.innerHTML = '';
         posts.forEach(p => {
+            // webMaxPage 是 NGA 报告的真实总页数，大于已下载页数说明此帖尚未下载完整
+            const incomplete = p.webMaxPage > 0 && p.maxPage > 0 && p.webMaxPage > p.maxPage;
+            const pageCell = `${p.maxPage}/${p.maxFloor}` +
+                (incomplete ? `<br><small style="color:#c62828">全帖 ${p.webMaxPage} 页，未下载完整</small>` : '');
             tbody.innerHTML += `<tr>
                 <td>${p.tid}</td>
-                <td>${p.title}</td>
-                <td>${p.maxPage}/${p.maxFloor}</td>
+                <td>${escapeHtml(p.title)}</td>
+                <td>${pageCell}</td>
                 <td>${formatTime(p.createdTime)}<br>${formatTime(p.updatedTime)}</td>
-                <td>${p.folderName}</td>
+                <td title="${escapeHtml(p.folderName)}">${escapeHtml(p.folderName)}</td>
                 <td>
                     <button class="icon-btn update" onclick="updatePost(${p.tid})" title="增量更新"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg></button>
                     <button class="icon-btn download" onclick="downloadPost(${p.tid})" title="下载"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>

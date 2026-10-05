@@ -53,6 +53,11 @@
                 <div class="progress-bar"><div class="progress-bar-fill" id="floor-bar" style="width:0%"></div></div>
             </label>
             <small id="status-text">等待中...</small>
+            <div id="limit-tip" style="display:none;margin-top:0.8rem;padding:0.6rem 0.8rem;border-left:4px solid #c62828;background:#ffebee;border-radius:var(--pico-border-radius)">
+                <strong style="color:#c62828">⚠️ 单次下载页数已达上限</strong>
+                <p id="limit-text" style="margin:0.4rem 0 0.6rem 0"></p>
+                <button class="primary" id="limit-continue-btn" onclick="continueUpdate()">继续增量更新此帖</button>
+            </div>
         </article>
         <article>
             <header><strong>任务队列</strong> <button class="secondary outline" onclick="loadQueue()" style="float:right">重载</button></header>
@@ -66,6 +71,7 @@
     </main>
     <script>
     let ws = null;
+    let currentTid = 0;
 
     async function checkAuth() {
         const res = await fetch('/api/tasks');
@@ -97,9 +103,18 @@
         ws.onclose = () => { setTimeout(connectWS, 3000); };
     }
 
+    function showLimitTip(msg) {
+        const tip = document.getElementById('limit-tip');
+        const text = document.getElementById('limit-text');
+        if (!tip || !text) return;
+        text.textContent = msg.message || '';
+        tip.style.display = msg.limited ? 'block' : 'none';
+    }
+
     function updateProgress(msg) {
         const area = document.getElementById('progress-area');
         area.style.display = 'block';
+        if (msg.tid) currentTid = msg.tid;
 
         document.getElementById('page-progress').textContent = `${msg.currentPage || 0}/${msg.totalPage || 0}`;
         document.getElementById('page-bar').style.width = msg.totalPage > 0 ? `${(msg.currentPage/msg.totalPage)*100}%` : '0%';
@@ -123,27 +138,56 @@
             }
         });
 
+        const statusEl = document.getElementById('status-text');
+
         if (msg.type === 'task_complete') {
-            document.getElementById('status-text').textContent = msg.message || '下载完成';
-            document.getElementById('progress-title').textContent = `tid ${msg.tid} - 完成`;
+            statusEl.textContent = msg.message || '下载完成';
+            statusEl.style.color = msg.limited ? '#c62828' : '';
+            document.getElementById('progress-title').textContent = `tid ${msg.tid} - ${msg.limited ? '完成（未下载完整）' : '完成'}`;
+            showLimitTip(msg);
         } else if (msg.type === 'task_failed') {
-            document.getElementById('status-text').textContent = msg.error || '下载失败';
+            statusEl.textContent = msg.error || '下载失败';
+            statusEl.style.color = '';
             document.getElementById('progress-title').textContent = `tid ${msg.tid} - 失败`;
+            showLimitTip({ limited: false });
         } else {
-            document.getElementById('status-text').textContent = `阶段: ${msg.stage || '-'} | 状态: ${msg.status || '-'}`;
+            statusEl.textContent = `阶段: ${msg.stage || '-'} | 状态: ${msg.status || '-'}`;
+            statusEl.style.color = '';
             document.getElementById('progress-title').textContent = `当前任务 - tid: ${msg.tid}`;
+            showLimitTip({ limited: false });
+        }
+    }
+
+    async function continueUpdate() {
+        if (!currentTid) return;
+        const res = await fetch('/api/update', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ tid: currentTid })
+        });
+        if (res.ok) {
+            document.getElementById('limit-tip').style.display = 'none';
+            loadQueue();
+        } else {
+            const err = await res.json().catch(function() { return {}; });
+            alert(err.error || '加入队列失败');
         }
     }
 
     async function loadQueue() {
         const res = await fetch('/api/tasks');
-        const tasks = await res.json();
+        const tasks = (await res.json()) || [];
         const tbody = document.getElementById('queue-body');
         tbody.innerHTML = '';
 
+        const tipVisible = document.getElementById('limit-tip').style.display !== 'none';
+
         if (tasks.length === 0) {
             tbody.innerHTML = '<tr><td colspan="5">队列空闲</td></tr>';
-            document.getElementById('progress-area').style.display = 'none';
+            // 刚因单次下载上限而结束时，不能把提示一并隐藏掉
+            if (!tipVisible) {
+                document.getElementById('progress-area').style.display = 'none';
+            }
             return;
         }
 
@@ -174,7 +218,7 @@
         });
 
         var hasRunning = tasks.some(function(t) { return isRunning(t); });
-        if (!hasRunning) {
+        if (!hasRunning && document.getElementById('limit-tip').style.display === 'none') {
             document.getElementById('progress-area').style.display = 'none';
         }
     }

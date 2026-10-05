@@ -23,6 +23,11 @@ type TaskStatus struct {
 	EndTime      time.Time `json:"endTime,omitempty"`
 	QueueTime    time.Time `json:"queueTime"` // 入队时间
 	OnComplete   func(success bool)
+
+	// 单次下载页数限制（#56）相关信息，用于向前端说明本次并未下载完整
+	Limited           bool `json:"limited,omitempty"`
+	WebTotalPage      int  `json:"webTotalPage,omitempty"`
+	PageDownloadLimit int  `json:"pageDownloadLimit,omitempty"`
 }
 
 // TaskManager 管理任务队列，每次只执行一个任务
@@ -147,6 +152,15 @@ func (tm *TaskManager) executeTask(task *TaskStatus) {
 		return
 	}
 
+	// 记录单次下载页数限制状态，供 WebSocket 与前端提示"未下载完整"
+	tm.mu.Lock()
+	task.Status = "completed"
+	task.EndTime = time.Now()
+	task.Limited = tie.PageDownloadLimitTriggered
+	task.WebTotalPage = tie.WebRealMaxPage
+	task.PageDownloadLimit = tie.PageDownloadLimit
+	tm.mu.Unlock()
+
 	tm.hub.BroadcastTaskComplete(task)
 	if task.OnComplete != nil {
 		task.OnComplete(true)
@@ -238,7 +252,8 @@ func (tm *TaskManager) GetAllTasks() []TaskStatus {
 	tm.mu.Lock()
 	defer tm.mu.Unlock()
 
-	var result []TaskStatus
+	// 初始化为空切片而非 nil，否则队列为空时 JSON 会序列化成 null，前端 tasks.length 会直接报错
+	result := []TaskStatus{}
 	if tm.running != nil {
 		result = append(result, *tm.running)
 	}
@@ -256,6 +271,7 @@ type PostInfo struct {
 	FolderName  string `json:"folderName"`
 	MaxPage     int    `json:"maxPage"`
 	MaxFloor    int    `json:"maxFloor"`
+	WebMaxPage  int    `json:"webMaxPage,omitempty"` // NGA 报告的真实总页数，大于 MaxPage 说明尚未下载完整
 	FloorCount  int    `json:"floorCount,omitempty"`
 	HasMarkdown bool   `json:"hasMarkdown"`
 	CreatedTime string `json:"createdTime"`

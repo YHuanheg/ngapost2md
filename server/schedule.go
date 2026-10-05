@@ -144,6 +144,10 @@ func (sm *ScheduleManager) GetAllSchedules() []ScheduleTask {
 		sm.updateNextRunTime(i)
 	}
 
+	if sm.data.Tasks == nil {
+		// 初始化为空切片而非 nil，否则没有定时任务时 JSON 会序列化成 null，前端会直接报错
+		return []ScheduleTask{}
+	}
 	return sm.data.Tasks
 }
 
