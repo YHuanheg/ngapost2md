@@ -1,4 +1,4 @@
-# ngapost2md ver.[NEO_2.0.0]
+# ngapost2md ver.[NEO_2.0.0-fix]
 
 ngapost2md 是一个将 NGA 论坛帖子转换为 Markdown 格式的工具。它支持快速爬楼并存储回复人、时间和内容，同时支持保存正文图片。2.0.0 开始尝鲜支持 Server 模式，提供 WebUI 支持。
 
@@ -61,7 +61,9 @@ ngapost2md --gen-config-file 生成默认配置文件于 config.ini 并退出
 
 在 release 页面的打包文件中，config.ini 文件与主程序平级。假如需要生成新的默认配置文件，可使用 `--gen-config-file` 参数。此会覆盖 config.ini 为默认配置。
 
-**不要试图在 config.ini 内添加新条目或者增加、修改注释。软件每次启动都会舍弃此类外界变动并重新保存 config.ini 文件。**
+程序启动时会比对内置默认配置：若发现 config.ini 缺少某些配置项（例如分发包里的 config.ini 落后于程序版本），会自动以默认值补全并回写文件，无需手工重新生成；配置完整时不会重写文件。
+
+**不要试图在 config.ini 内添加新条目或者增加、修改注释。** 程序在配置项缺失或配置版本变化时会以默认配置为模板重写 config.ini：你自行新增的条目会被保留但不会被读取，自己写的注释会被默认注释覆盖。
 
 ## 注意事项
 
@@ -121,12 +123,12 @@ ngapost2md 支持以 HTTP Server 模式运行，提供 Web 前端界面和 REST 
 - **Session Cookie（Web 前端）**：通过登录页 `/login.html` 登录，服务端维持 72 小时有效的 session，Cookie 名称 `ngapost2md_session`
 - **Basic Auth（API 客户端）**：用户名固定 `admin`，密码同上
 - **WebSocket**：支持 Session Cookie（浏览器自动携带）或 URL 参数 `?token=base64(admin:password)`
-- **公开路由**（无需认证）：`POST /api/login`、`POST /api/logout`、`GET /api/version`、`/login.html`
+- **公开路由**（无需认证）：`POST /api/login`、`POST /api/logout`、`GET /api/version`、`/login.html`；`/ws` 在中间件层放行，由 WebSocket handler 自行校验 Session Cookie 或 `?token=`
 
 ### 前端页面
 
-- **下载帖子**：输入 tid 或 NGA URL，实时查看下载进度（WebSocket 推送）
-- **帖子列表**：查看所有已下载帖子，支持一键增量更新
+- **下载帖子**：输入 tid 或 NGA URL，实时查看下载进度（WebSocket 推送）；若因单次下载页数上限而未下载完整，会明确提示并提供「继续增量更新此帖」按钮
+- **帖子列表**：查看所有已下载帖子，支持一键增量更新；未下载完整的帖子会标注「全帖 N 页，未下载完整」
 - **定时任务**：创建 cron 定时更新任务，支持常用模板（每天9点、工作日9点等）
 - **配置管理**：在线查看和修改 config.ini（`server.password` 不可通过 API 修改）
 
@@ -168,6 +170,21 @@ port = 8080
 - `port`：默认监听端口，可被 `--port` 覆盖
 
 Server 模式与 CLI 模式共享同一 config.ini 和工作目录，互不影响。
+
+## 文档
+
+| 文档 | 内容 |
+|---|---|
+| [docs/getting-started.md](docs/getting-started.md) | 构建、运行与常见启动问题 |
+| [docs/architecture.md](docs/architecture.md) | 代码结构、数据流与关键机制 |
+| [docs/configuration.md](docs/configuration.md) | config.ini 全部配置项 |
+| [docs/server-api.md](docs/server-api.md) | Server 模式认证、REST API 与 WebSocket |
+| [docs/release.md](docs/release.md) | 版本号协同与发布流程 |
+| [AGENTS.md](AGENTS.md) | 面向 AI 协作者的开发约定与红线 |
+
+## 许可证
+
+本项目基于 [MIT 许可证](LICENSE) 开源。
 
 ## Special Thanks
 

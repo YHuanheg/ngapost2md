@@ -1,5 +1,7 @@
 # ngapost2md Server Mode Spec
 
+> **定位说明**：本文是 Server 模式**实现前的设计规格**，实现落地后已按最终行为回填。日常查证程序行为请以 [`docs/`](../docs/)（现状文档）为准；本文用于追溯设计意图与接口契约的由来。
+
 ## 1. Overview
 
 为 ngapost2md 添加 Server 运行模式，以 HTTP API 暴露核心下载/更新功能，并提供可选的 Web 前端界面。前端通过 HTTP API 与后端交互，实时下载进度通过 WebSocket 推送。
@@ -20,7 +22,7 @@ ngapost2md serve [OPTIONS]
 | `--no-ui` | | `false` | 禁用前端，仅提供 API |
 
 - 若 `--password` 未指定，从 `config.ini` 的 `[server]` section 中 `password` 读取
-- 若两者均无密码，Server 模式拒绝启动并提示设置密码
+- 若两者均无有效密码（未设置或仍为默认占位符 `<;MODIFY_ME;>`），自动生成一个随机密码写入 `config.ini` 并启动，同时在终端打印该密码
 - CLI 模式（原有 positional arg 方式）不受影响，`serve` 和原 CLI 为两条互斥路径
 
 ## 3. 认证
@@ -46,10 +48,12 @@ Web 前端通过登录页面进行认证，服务端维持 session：
 
 ### 3.3 公开路由
 
-以下路由不要求认证：
+以下路由在认证中间件层放行：
 - `POST /api/login`
 - `POST /api/logout`
+- `GET /api/version`
 - `/login.html`（登录页面）
+- `/ws`（WebSocket，由 handler 自行校验 Session Cookie 或 `?token=`）
 
 ### 3.4 WebSocket 认证
 
@@ -80,18 +84,25 @@ WebSocket 连接支持两种认证方式：
 ```json
 {
   "tid": 123456,
+  "authorId": 0,
   "type": "download",      // "download" | "update"
-  "status": "downloading", // "pending" | "downloading" | "processing" | "generating_markdown" | "completed" | "failed" | "cancelled"
+  "status": "downloading", // "queued" | "downloading" | "processing" | "generating_markdown" | "completed" | "failed" | "cancelled"
   "currentPage": 5,
   "totalPage": 10,
   "currentFloor": 120,
   "totalFloor": 200,
-  "stage": "downloading",  // "downloading" | "processing_content" | "downloading_assets" | "generating_markdown"
+  "stage": "downloading",  // "downloading" | "processing_content" | "generating_markdown" | "completed"
   "error": "",
+  "queueTime": "2026-05-17T09:59:00Z",
   "startTime": "2026-05-17T10:00:00Z",
-  "endTime": ""
+  "endTime": "",
+  "limited": false,          // 本次是否因 page_download_limit 截断
+  "webTotalPage": 0,         // NGA 报告的真实总页数（未裁剪）
+  "pageDownloadLimit": 100   // 本次生效的单次下载页数上限
 }
 ```
+
+`limited` / `webTotalPage` / `pageDownloadLimit` 三个字段仅在触发单次下载页数上限时才有意义，用于前端提示"尚未下载完整"。
 
 ### 4.2 已下载帖子
 
@@ -117,11 +128,17 @@ WebSocket 连接支持两种认证方式：
     "folderName": "123456-帖子标题",
     "maxPage": 10,
     "maxFloor": 200,
+    "webMaxPage": 10,
     "floorCount": 180,
-    "hasMarkdown": true
+    "hasMarkdown": true,
+    "createdTime": "2026-05-15T10:00:00+08:00",
+    "updatedTime": "2026-05-17T10:05:00+08:00"
   }
 ]
 ```
+
+- `webMaxPage` 为 NGA 报告的真实总页数（存于 `process.ini` 的 `local.web_max_page`）；`webMaxPage > maxPage` 表示该帖因单次下载上限等原因**尚未下载完整**
+- 列表为空时返回 `[]`（而非 `null`）
 
 ### 4.3 定时任务
 
@@ -168,7 +185,8 @@ WebSocket 连接支持两种认证方式：
 
 - Server 模式与 CLI 模式共享同一个 `config.ini`
 - GET 返回所有 section 及 key-value（不含 `[server]` 中的 `password`），同时返回 `_comments` 字段包含每个配置项的注释说明
-- PUT 仅更新传入的 key，未传入的保持原值
+- GET 在读取时会顺带比对内置默认配置：若配置项缺失或配置版本变化，会以默认配置为模板回写 `config.ini`（用户自行新增的项保留），因此该接口并非纯只读
+- PUT 仅更新传入的 key，未传入的保持原值，写回时按同样的模板规则补全缺项
 - 更新后立即生效（重新加载配置），但对于正在运行的任务，使用任务启动时的配置
 - `[server]` section 中的 `password` 不可通过 API 修改（安全考虑），只能通过命令行 `--password` 或手动编辑 config.ini
 
@@ -221,7 +239,10 @@ WebSocket 认证方式（优先级从高到低）：
   "totalPage": 10,
   "currentFloor": 120,
   "totalFloor": 200,
-  "stage": "downloading"
+  "stage": "downloading",
+  "limited": false,
+  "webTotalPage": 0,
+  "pageDownloadLimit": 100
 }
 ```
 
@@ -231,9 +252,14 @@ WebSocket 认证方式（优先级从高到低）：
   "tid": 123456,
   "taskType": "download",
   "status": "completed",
-  "message": "下载完成，共 10 页 200 楼"
+  "message": "下载完成，共 10 页 200 楼",
+  "limited": false,
+  "webTotalPage": 0,
+  "pageDownloadLimit": 100
 }
 ```
+
+`limited` 为 `true` 时表示本次因 `page_download_limit` 截断（任务本身仍算成功），此时 `message` 会说明"已达单次下载页数上限（N 页）：本次已下载至第 X 页，全帖共 Y 页，尚未下载完整"，前端据此展示提示与「继续增量更新」入口。
 
 ```json
 {
@@ -271,11 +297,14 @@ WebSocket 认证方式（优先级从高到低）：
   - 楼层进度：当前楼/总楼
   - 状态文字：downloading / processing / completed / failed
 - 进度通过 WebSocket 实时推送，前端收到 WebSocket 消息后刷新队列数据并更新进度展示
+- 任务完成消息的 `limited` 为 `true` 时（单次下载页数达上限），显示红色告警块说明全帖页数与本次进度，并提供「继续增量更新此帖」按钮（调用 `POST /api/update`）；该提示不会被随后的队列刷新隐藏
 
 ### 5.2 页面二：帖子列表
 
 - 表格展示所有已下载帖子：
-  - 列：tid、标题、楼层数、最大页数、文件夹名
+  - 列：tid、标题、页数/楼层、创建/更新时间、文件夹、操作
+  - 页数列在 `webMaxPage > maxPage` 时追加"全帖 N 页，未下载完整"提示
+  - 文件夹列允许换行并强制断词（长文件夹名不得撑破表格），悬停显示完整名称
 - 每行有"增量更新"按钮，点击后跳转到下载页面的进度展示模式（或就地展示进度）
 - 每行有"下载"按钮，点击后触发 `GET /api/posts/{tid}/download` 下载 zip 包
 - 支持刷新列表
@@ -334,14 +363,20 @@ WebSocket 认证方式（优先级从高到低）：
 ### 6.3 进度回调机制
 
 ```go
-type ProgressCallback func(stage string, currentPage int, totalPage int, currentFloor int, totalFloor int)
+type ProgressCallback func(stage string, currentPage, totalPage, currentFloor, totalFloor int)
 
-// Tiezi.Download 增加 callback 参数
-func (t *Tiezi) Download(callback ProgressCallback) error
+// 回调通过 Tiezi 的字段注入，Download 本身不接收参数
+type Tiezi struct {
+    // ...
+    ProgressCallback ProgressCallback // CLI 模式下为 nil
+}
+
+func (tiezi *Tiezi) Download() error
 ```
 
-- CLI 模式调用时传入 nil（不影响原有行为）
-- Server 模式调用时传入回调，回调将进度信息推送到 WebSocket 连接管理器
+- CLI 模式不设置该字段（保持 nil，不影响原有行为）
+- Server 模式在 `executeTask` 中设置 `tie.ProgressCallback`，回调把进度写入任务状态并广播 WebSocket 消息
+- 回调的 stage 取值：`downloading` | `processing_content` | `generating_markdown` | `completed`
 
 ### 6.4 定时任务执行器
 
@@ -386,4 +421,4 @@ port = 8080
 
 - Server 模式和 CLI 模式共享 config.ini 和工作目录
 - Server 正在下载某个 tid 时，CLI 不应同时操作该 tid（但无法强制阻止，仅做提示）
-- CLI 模式代码不做任何改动，仅新增 serve 路径
+- 两种模式共用 `nga` 包的核心逻辑（`Tiezi`、配置加载），不维护两套实现；CLI 路径不设置 `ProgressCallback`，即为原有行为
