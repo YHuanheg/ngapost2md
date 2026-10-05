@@ -41,7 +41,11 @@ go vet ./...                       # 必须无输出
 | linux | amd64 / arm64 | `.tar.gz` |
 | darwin | amd64 / arm64 | `.tar.gz` |
 
-产物名：`ngapost2md-NEO_<tag>-<os>-<arch>`；包内**平铺**（`assets/` 下的文件不带目录前缀）：可执行文件、`LICENSE`、`README.md`、`config.ini`、`win_CLICK_ME_TO_CHECK_UPDATE.bat`、`win_updater.ps1`（后两个是 Windows 更新入口，按上游约定所有平台包都放）。
+产物名：`ngapost2md-NEO_<tag>-<os>-<arch>`；包内**平铺**（`assets/` 下的文件不带目录前缀）：可执行文件、`LICENSE`、`README.md`、`config.ini`、`win_CLICK_ME_TO_START.bat` + `win_CLICK_ME_TO_START.ps1`（Windows 双击启动器，菜单式，含 CLI 与 Server 两种模式）、`win_CLICK_ME_TO_CHECK_UPDATE.bat` + `win_updater.ps1`（Windows 更新入口）。按上游约定，这些脚本所有平台包都放。
+
+> ⚠️ 打包时 `assets/*` 要**遍历整个 `assets/` 目录**，不要只复制 `config.ini`；且 `config.ini` 必须与可执行文件**同级**——这是 README 对用户的承诺（"config.ini 文件与主程序平级"）。若把 `config.ini` 塞进 `assets/` 子目录，用户解压后程序在根目录找不到配置，只会重新生成一份默认配置。
+>
+> ⚠️ `win_CLICK_ME_TO_START.ps1` **必须保存为 UTF-8 with BOM**：Windows PowerShell 5.1 读取无 BOM 的 UTF-8 时会按 ANSI 解码，中文界面会变成乱码。配套的 `.bat` 只做转发，**必须保持纯 ASCII**——cmd.exe 会用当前代码页解码整个 .bat 文件，`chcp 65001` 来不及生效，含中文的 .bat 在中文系统上会被拆成乱码命令。
 
 > ⚠️ 打包时 `assets/*` 要**遍历整个 `assets/` 目录**，不要只复制 `config.ini`；且 `config.ini` 必须与可执行文件**同级**——这是 README 对用户的承诺（"config.ini 文件与主程序平级"）。若把 `config.ini` 塞进 `assets/` 子目录，用户解压后程序在根目录找不到配置，只会重新生成一份默认配置。
 

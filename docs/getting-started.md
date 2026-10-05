@@ -76,6 +76,8 @@ Cookie 获取方式：浏览器登录 NGA → 开发者工具 → Application/�
 
 对同一个 tid **再次运行即为增量更新**：程序读取本地 `process.ini` 记录的进度，只抓取新页面与新楼层。
 
+> Windows 用户可以省掉敲命令：双击包内的 `win_CLICK_ME_TO_START.bat`，出现菜单后按 `[1]` 输入 tid 下载、按 `[2]` 按用户筛选、按 `[3]` 启动 Server 模式、按 `[4]` 用记事本编辑 `config.ini`。
+
 输出位置由 `[post].output_path` 决定（默认 `./`）；文件夹名由 `[post].use_title_as_folder_name` 决定，关闭时为 `123456`，开启时为 `123456-帖子标题`；只看某用户时为 `123456(789)` / `123456(789)-帖子标题`。
 
 ## Server 模式
