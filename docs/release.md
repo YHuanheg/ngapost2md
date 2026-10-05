@@ -41,7 +41,9 @@ go vet ./...                       # 必须无输出
 | linux | amd64 / arm64 | `.tar.gz` |
 | darwin | amd64 / arm64 | `.tar.gz` |
 
-产物名：`ngapost2md-NEO_<tag>-<os>-<arch>`；包内平铺：可执行文件 + `LICENSE` + `README.md` + `assets/config.ini`。
+产物名：`ngapost2md-NEO_<tag>-<os>-<arch>`；包内**平铺**（`assets/` 下的文件不带目录前缀）：可执行文件、`LICENSE`、`README.md`、`config.ini`、`win_CLICK_ME_TO_CHECK_UPDATE.bat`、`win_updater.ps1`（后两个是 Windows 更新入口，按上游约定所有平台包都放）。
+
+> ⚠️ 打包时 `assets/*` 要**遍历整个 `assets/` 目录**，不要只复制 `config.ini`；且 `config.ini` 必须与可执行文件**同级**——这是 README 对用户的承诺（"config.ini 文件与主程序平级"）。若把 `config.ini` 塞进 `assets/` 子目录，用户解压后程序在根目录找不到配置，只会重新生成一份默认配置。
 
 ## 本地交叉编译（当前采用的方式）
 
