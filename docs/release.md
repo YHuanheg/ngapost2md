@@ -55,7 +55,7 @@ go vet ./...                       # 必须无输出
 export CGO_ENABLED=0
 TAG=2.0.1
 TS=$(date +%s)
-HASH=$(git rev-parse HEAD)
+HASH=$(git rev-parse "refs/tags/$TAG^{commit}")   # 取 tag 指向的提交，不要用 HEAD
 LD="-X github.com/ludoux/ngapost2md/nga.DEBUG_MODE=0 \
     -X github.com/ludoux/ngapost2md/nga.BUILD_TS=$TS \
     -X github.com/ludoux/ngapost2md/nga.GIT_REF=refs/tags/$TAG \
